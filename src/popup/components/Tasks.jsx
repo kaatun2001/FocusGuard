@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
-import { Plus, Trash2, Check, Edit2, X, Flag } from 'lucide-react'
+import { Plus, Trash2, Check, Edit2, X } from 'lucide-react'
 import { auth } from '../../utils/firebase.js'
 import { pushToCloud } from '../../utils/sync.js'
 
-const PRIORITY = {
-  low:    { label: 'Low',    color: '#7d8590' },
-  medium: { label: 'Medium', color: '#d29922' },
-  high:   { label: 'High',   color: '#f85149' },
+const CATEGORY = {
+  work:     { label: 'Work',     icon: '💼', color: '#58a6ff' },
+  study:    { label: 'Study',    icon: '📚', color: '#a371f7' },
+  personal: { label: 'Personal', icon: '🏃', color: '#3fb950' },
+  creative: { label: 'Creative', icon: '🎨', color: '#f0883e' },
+  other:    { label: 'Other',    icon: '🔧', color: '#7d8590' },
 }
 
 function genId() {
@@ -18,11 +20,10 @@ export default function Tasks() {
   const [activeTaskId, setActiveTaskId] = useState(null)
   const [title,        setTitle]        = useState('')
   const [target,       setTarget]       = useState(4)
-  const [priority,     setPriority]     = useState('medium')
+  const [category,     setCategory]     = useState('work')
   const [editId,       setEditId]       = useState(null)
   const [editTitle,    setEditTitle]    = useState('')
   const [showDone,     setShowDone]     = useState(false)
-  const [filter,       setFilter]       = useState('all') // all | high | medium | low
 
   useEffect(() => {
     chrome.storage.local.get(['tasks', 'activeTaskId'], (r) => {
@@ -55,35 +56,29 @@ export default function Tasks() {
     const task = {
       id: genId(), title: title.trim(),
       pomodorosTarget: target, pomodorosCompleted: 0,
-      completed: false, priority, createdAt: Date.now(),
+      completed: false, category, createdAt: Date.now(),
     }
     persist([...tasks, task])
     setTitle('')
     setTarget(4)
-    setPriority('medium')
+    setCategory('work')
   }
 
-  const deleteTask   = (id) => persist(tasks.filter((t) => t.id !== id), activeTaskId === id ? null : undefined)
-  const toggleDone   = (id) => persist(tasks.map((t) => t.id === id ? { ...t, completed: !t.completed } : t))
-  const saveEdit     = (id) => {
+  const deleteTask = (id) => persist(tasks.filter((t) => t.id !== id), activeTaskId === id ? null : undefined)
+  const toggleDone = (id) => persist(tasks.map((t) => t.id === id ? { ...t, completed: !t.completed } : t))
+  const saveEdit   = (id) => {
     if (!editTitle.trim()) return
     persist(tasks.map((t) => t.id === id ? { ...t, title: editTitle.trim() } : t))
     setEditId(null)
   }
-  const selectTask   = (id) => {
+  const selectTask = (id) => {
     const next = activeTaskId === id ? null : id
     chrome.storage.local.set({ activeTaskId: next })
     setActiveTaskId(next)
   }
 
-  const pending   = tasks.filter((t) => !t.completed)
-  const done      = tasks.filter((t) => t.completed)
-  const filtered  = filter === 'all' ? pending : pending.filter((t) => t.priority === filter)
-
-  const sortedFiltered = [...filtered].sort((a, b) => {
-    const order = { high: 0, medium: 1, low: 2 }
-    return order[a.priority] - order[b.priority]
-  })
+  const pending = tasks.filter((t) => !t.completed)
+  const done    = tasks.filter((t) => t.completed)
 
   return (
     <div style={{ padding: '14px 14px 8px', display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -98,27 +93,27 @@ export default function Tasks() {
           onKeyDown={(e) => e.key === 'Enter' && addTask()}
           placeholder="What are you working on?"
         />
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {/* Priority picker */}
-          <div style={{ display: 'flex', gap: 4 }}>
-            {Object.entries(PRIORITY).map(([k, v]) => (
-              <button
-                key={k}
-                onClick={() => setPriority(k)}
-                title={v.label}
-                style={{
-                  padding: '4px 8px', borderRadius: 6, fontSize: 11, fontWeight: 500,
-                  border: `1px solid ${priority === k ? v.color : 'var(--border)'}`,
-                  background: priority === k ? `${v.color}20` : 'transparent',
-                  color: priority === k ? v.color : 'var(--muted)', cursor: 'pointer',
-                }}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>
-          {/* Target */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto' }}>
+        {/* Category picker */}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          {Object.entries(CATEGORY).map(([k, v]) => (
+            <button
+              key={k}
+              onClick={() => setCategory(k)}
+              style={{
+                padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 500,
+                border: `1px solid ${category === k ? v.color : 'var(--border)'}`,
+                background: category === k ? `${v.color}20` : 'transparent',
+                color: category === k ? v.color : 'var(--muted)', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 4,
+              }}
+            >
+              <span>{v.icon}</span>{v.label}
+            </button>
+          ))}
+        </div>
+        {/* Target + Add */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ fontSize: 11, color: 'var(--muted)' }}>🍅</span>
             <input
               type="number" min={1} max={20} value={target}
@@ -127,41 +122,20 @@ export default function Tasks() {
               style={{ width: 54, textAlign: 'center', padding: '5px 6px' }}
             />
           </div>
-          <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12 }} onClick={addTask}>
+          <button className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12, marginLeft: 'auto' }} onClick={addTask}>
             <Plus size={14} /> Add
           </button>
         </div>
       </div>
 
-      {/* Filter tabs */}
-      {pending.length > 0 && (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: 'var(--muted)', marginRight: 2 }}>Filter:</span>
-          {['all', 'high', 'medium', 'low'].map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              style={{
-                padding: '3px 9px', borderRadius: 20, fontSize: 11, border: 'none', cursor: 'pointer',
-                background: filter === f ? 'var(--surface2)' : 'transparent',
-                color: filter === f ? 'var(--text)' : 'var(--muted)',
-                fontWeight: filter === f ? 500 : 400,
-              }}
-            >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
-            </button>
-          ))}
-        </div>
-      )}
-
       {/* Task list */}
-      {sortedFiltered.length === 0 && (
+      {pending.length === 0 && (
         <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--muted)', fontSize: 13 }}>
-          {pending.length === 0 ? '🎯 No tasks yet. Add one above!' : 'No tasks match this filter.'}
+          🎯 No tasks yet. Add one above!
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-        {sortedFiltered.map((task) => (
+        {pending.map((task) => (
           <TaskCard
             key={task.id}
             task={task}
@@ -175,6 +149,7 @@ export default function Tasks() {
             onEditChange={setEditTitle}
             onEditSave={() => saveEdit(task.id)}
             onEditCancel={() => setEditId(null)}
+            category={CATEGORY[task.category]}
           />
         ))}
       </div>
@@ -193,7 +168,8 @@ export default function Tasks() {
             <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
               {done.map((task) => (
                 <TaskCard key={task.id} task={task} onToggle={() => toggleDone(task.id)} onDelete={() => deleteTask(task.id)}
-                  isActive={false} isEditing={false} onSelect={() => {}} onEditStart={() => {}} onEditChange={() => {}} onEditSave={() => {}} onEditCancel={() => {}} />
+                  isActive={false} isEditing={false} onSelect={() => {}} onEditStart={() => {}} onEditChange={() => {}} onEditSave={() => {}} onEditCancel={() => {}}
+                  category={CATEGORY[task.category]} />
               ))}
             </div>
           )}
@@ -203,9 +179,8 @@ export default function Tasks() {
   )
 }
 
-function TaskCard({ task, isActive, isEditing, editTitle, onSelect, onDelete, onToggle, onEditStart, onEditChange, onEditSave, onEditCancel }) {
-  const pct = task.pomodorosTarget > 0 ? Math.min(100, (task.pomodorosCompleted / task.pomodorosTarget) * 100) : 0
-  const p   = PRIORITY[task.priority] || PRIORITY.medium
+function TaskCard({ task, isActive, isEditing, editTitle, onSelect, onDelete, onToggle, onEditStart, onEditChange, onEditSave, onEditCancel, category }) {
+  const cat = category || CATEGORY.other
 
   return (
     <div
@@ -241,9 +216,15 @@ function TaskCard({ task, isActive, isEditing, editTitle, onSelect, onDelete, on
             />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-              <Flag size={11} color={p.color} fill={p.color} style={{ flexShrink: 0 }} />
-              <span style={{ fontSize: 12, color: 'var(--text)', textDecoration: task.completed ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 12, color: 'var(--text)', textDecoration: task.completed ? 'line-through' : 'none', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                 {task.title}
+              </span>
+              <span style={{
+                fontSize: 10, padding: '1px 6px', borderRadius: 20, flexShrink: 0,
+                background: `${cat.color}20`, color: cat.color, fontWeight: 500,
+                display: 'flex', alignItems: 'center', gap: 3,
+              }}>
+                <span>{cat.icon}</span>{cat.label}
               </span>
             </div>
           )}
@@ -267,7 +248,7 @@ function TaskCard({ task, isActive, isEditing, editTitle, onSelect, onDelete, on
         <div style={{ display: 'flex', gap: 2, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
           {isEditing ? (
             <>
-              <ActionBtn onClick={onEditSave}  icon={<Check size={13} />} color="var(--green)" />
+              <ActionBtn onClick={onEditSave}   icon={<Check size={13} />} color="var(--green)" />
               <ActionBtn onClick={onEditCancel} icon={<X     size={13} />} color="var(--muted)" />
             </>
           ) : (

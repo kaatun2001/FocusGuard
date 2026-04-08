@@ -20,39 +20,21 @@ npm run build
 
 ---
 
-## ✨ What's New in v2
-
-| Feature | Details |
-|---|---|
-| 🔔 Sound alerts | Real chime tones on session completion (Web Audio API) |
-| ⚡ Auto-start | Optionally auto-advance breaks and focus sessions |
-| ⌨️ Keyboard shortcuts | **Space** = play/pause · **R** = reset · **S** = skip |
-| 🏳️ Task priority | Low / Medium / High with color-coded flags |
-| 📅 28-day heatmap | GitHub-style activity calendar |
-| 🎯 Daily goal | Set a daily pomodoro target with live progress |
-| 📊 Focus Score | Arc gauge with letter grade (S / A / B / C / D) |
-| 🔥 Longest streak | Tracks your all-time best focus streak |
-| 🏅 Best day | Shows your most productive single day |
-| 🕒 Badge countdown | Toolbar badge shows minutes remaining (e.g. "23m") |
-| 🌬️ Blocked page | Includes a breathing exercise + motivational quote |
-| 🔇 Volume slider | Fine-tune the chime volume |
-
----
-
-## 🧩 Features
+## ✨ Features
 
 ### ⏱️ Pomodoro Timer
 - 25-min focus sessions (fully customizable)
 - Short & long breaks with automatic session counting
 - Pause / Resume / Skip / Reset
 - Glowing ring animation while running
+- Keyboard shortcuts: **Space** play/pause · **R** reset · **S** skip
 
 ### ✅ Task Manager
 - Add tasks with custom pomodoro targets
-- Priority levels: Low / Medium / High
-- Filter tasks by priority
-- Pomodoro dot tracker per task
-- Link active task to timer session
+- Category tags: 💼 Work · 📚 Study · 🏃 Personal · 🎨 Creative · 🔧 Other
+- Colored category badge on each task card
+- Pomodoro dot progress tracker per task
+- Link active task to timer — notification shows task name + progress
 
 ### 🚫 Website Blocking
 - Blocks distracting sites **only during focus sessions**
@@ -60,15 +42,36 @@ npm run build
 - Beautiful blocked page with live countdown
 - Distraction attempts logged to stats
 
-### 📊 Statistics
-- Focus Score (0–100) with letter grade
-- Weekly bar chart
-- 28-day activity heatmap
-- Daily goal progress
-- Current & longest streak
-- Total pomodoros, focus hours, distractions
-- Best day tracking
+### 📊 Statistics & Export
+- Focus Score (0–100) with letter grade (S / A / B / C / D)
+- Weekly bar chart + 28-day activity heatmap
+- **This Week vs Last Week** comparison — pomodoros, focus hours, distractions, daily avg with ↑↓ trend arrows and % change
+- Daily goal progress, current & longest streak
+- Total pomodoros, focus hours, distractions, best day
 - Task completion rate
+- **Export CSV** — daily data + summary, downloads as `focusguard-stats.csv`
+- **Export PDF** — clean report with summary cards + 28-day table via browser print
+
+### 🎨 Dark / Light Mode
+- Sun/Moon toggle in the header
+- Full light theme (`--bg: #f5f5f5`, white cards, dark text)
+- Theme preference saved to `chrome.storage.local`
+
+### 🔔 Notifications
+- Session complete notification with active task name and progress `(3/4)`
+- Action buttons: **Start Break** after focus · **Start Focus** after break
+- Clicking the button sends `START_TIMER` to the background
+
+### 🏷️ Toolbar Badge
+- Shows live countdown (`24m`, `23m` …) while popup is open
+- Shows `⏸N` when paused
+- Shows duration ready-to-start when idle
+- Updates via popup's 500ms interval — no unreliable alarms
+
+### ☁️ Cloud Sync (Firebase)
+- Sign in with Google to sync tasks and stats across browsers
+- Real-time sync on storage changes with debounce
+- Merge-on-login resolves conflicts
 
 ### ⚙️ Settings
 - Timer durations (focus / short break / long break)
@@ -81,28 +84,30 @@ npm run build
 
 ---
 
-## 🏗️ Tech Stack
-
-- **React 18** + **Vite 5** — UI & build
-- **Tailwind CSS** — styling
-- **Recharts** — weekly bar chart
-- **Lucide React** — icons
-- **Chrome Extension MV3** — platform
-- **chrome.storage.local** — data (no login needed)
-- **chrome.alarms** — reliable background timer
-- **chrome.webNavigation** — website interception
-- **chrome.offscreen** — audio playback from service worker
-- **Web Audio API** — programmatic chime sounds
-
----
-
-## ⌨️ Keyboard Shortcuts (in popup)
+## ⌨️ Keyboard Shortcuts
 
 | Key | Action |
 |---|---|
 | `Space` | Start / Pause timer |
 | `R` | Reset timer |
 | `S` | Skip to next session |
+| `Alt+Shift+A` | Open FocusGuard from anywhere |
+
+---
+
+## 🏗️ Tech Stack
+
+- **React 18** + **Vite 5** — UI & build
+- **Tailwind CSS** — styling utilities
+- **Recharts** — weekly bar chart
+- **Lucide React** — icons
+- **Firebase Auth + Firestore** — cloud sync
+- **Chrome Extension MV3** — platform
+- `chrome.storage.local` — local data persistence
+- `chrome.alarms` — reliable background timer
+- `chrome.webNavigation` — website interception
+- `chrome.offscreen` — audio playback from service worker
+- `chrome.notifications` — session complete alerts with action buttons
 
 ---
 
@@ -111,36 +116,28 @@ npm run build
 ```
 focusguard/
 ├── public/
-│   ├── manifest.json         # Chrome MV3 config
+│   ├── manifest.json         # Chrome MV3 config + keyboard shortcut
 │   └── icons/                # Extension icons
 ├── src/
-│   ├── background/index.js   # Service worker (timer + blocking)
+│   ├── background/index.js   # Service worker (timer, blocking, notifications)
 │   ├── offscreen/index.js    # Audio playback (Web Audio API)
 │   ├── popup/
-│   │   ├── App.jsx           # Main app + daily goal header
-│   │   ├── index.css         # Design system (CSS variables)
+│   │   ├── App.jsx           # Main app, header, theme toggle, sync
+│   │   ├── index.css         # Design system (CSS variables, dark + light)
 │   │   └── components/
-│   │       ├── Timer.jsx     # Pomodoro timer UI
-│   │       ├── Tasks.jsx     # Task manager
-│   │       ├── Stats.jsx     # Dashboard + heatmap
+│   │       ├── Timer.jsx     # Pomodoro timer UI + badge updates
+│   │       ├── Tasks.jsx     # Task manager with categories
+│   │       ├── Stats.jsx     # Dashboard, heatmap, CSV/PDF export
 │   │       ├── Settings.jsx  # All settings
-│   │       └── Nav.jsx       # Bottom navigation
+│   │       └── Nav.jsx       # Bottom navigation (fixed)
 │   ├── blocked/
 │   │   └── BlockedPage.jsx   # Full-page block screen
-│   └── utils/storage.js      # Shared helpers & defaults
+│   └── utils/
+│       ├── storage.js        # Shared helpers & defaults
+│       ├── firebase.js       # Firebase init
+│       └── sync.js           # Cloud push/merge logic
 ├── popup.html
 ├── blocked.html
 ├── offscreen.html            # Hidden page for audio
 └── vite.config.js
 ```
-
----
-
-## 🔮 Future Improvements
-
-- 🤖 AI productivity insights
-- ☁️ Cloud sync (Firebase)
-- 📱 Cross-device tracking
-- 🎵 Ambient focus sounds
-- 🏆 Achievement badges
-- 📤 Export stats as CSV

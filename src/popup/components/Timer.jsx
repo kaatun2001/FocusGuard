@@ -35,10 +35,18 @@ export default function Timer() {
     return () => chrome.storage.onChanged.removeListener(listener)
   }, [])
 
-  // Update display every 500ms
+  // Update display every 500ms and push badge update to background
   useEffect(() => {
     const iv = setInterval(() => {
-      if (timerState) setTimeLeft(getTimeLeft(timerState))
+      if (!timerState) return
+      const tl = getTimeLeft(timerState)
+      setTimeLeft(tl)
+      chrome.runtime.sendMessage({
+        type: 'UPDATE_BADGE',
+        timeLeft: tl,
+        mode: timerState.mode,
+        isRunning: timerState.isRunning,
+      }).catch(() => {})
     }, 500)
     return () => clearInterval(iv)
   }, [timerState])
@@ -179,6 +187,19 @@ export default function Timer() {
         </button>
       </div>
 
+      {/* Keyboard shortcuts hint */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 10, color: 'var(--muted2)' }}>
+        {[['Space', 'play/pause'], ['R', 'reset'], ['S', 'skip']].map(([key, label]) => (
+          <span key={key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <kbd style={{
+              padding: '1px 5px', borderRadius: 4, fontSize: 10, fontFamily: 'inherit',
+              background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)',
+            }}>{key}</kbd>
+            <span>{label}</span>
+          </span>
+        ))}
+      </div>
+
       {/* Auto-start indicator */}
       {(settings?.autoStartBreaks || settings?.autoStartFocus) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--muted)' }}>
@@ -262,6 +283,14 @@ export default function Timer() {
           </div>
         </div>
       )}
+      {/* Alt+Shift+A discovery tip */}
+      <div style={{ fontSize: 10, color: 'var(--muted2)', textAlign: 'center', paddingBottom: 2 }}>
+        <kbd style={{
+          padding: '1px 5px', borderRadius: 4, fontSize: 10, fontFamily: 'inherit',
+          background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--muted)',
+        }}>Alt+Shift+A</kbd>
+        {' '}to open anytime
+      </div>
     </div>
   )
 }

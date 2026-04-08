@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { onAuthStateChanged } from 'firebase/auth'
-import { Cloud, CloudOff, Loader } from 'lucide-react'
+import { Cloud, CloudOff, Loader, Sun, Moon } from 'lucide-react'
 import Nav from './components/Nav.jsx'
 import Timer from './components/Timer.jsx'
 import Tasks from './components/Tasks.jsx'
@@ -20,7 +20,24 @@ export default function App() {
   const [user,          setUser]          = useState(undefined)  // undefined = loading
   const [syncStatus,    setSyncStatus]    = useState('idle')     // idle | syncing | synced | error
   const [showAuth,      setShowAuth]      = useState(false)
+  const [theme,         setTheme]         = useState('dark')
   const syncTimer = useRef(null)
+
+  // ── Theme ────────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    chrome.storage.local.get(['theme'], (r) => {
+      const saved = r.theme || 'dark'
+      setTheme(saved)
+      document.documentElement.setAttribute('data-theme', saved)
+    })
+  }, [])
+
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    document.documentElement.setAttribute('data-theme', next)
+    chrome.storage.local.set({ theme: next })
+  }
 
   // ── Auth state ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -87,7 +104,7 @@ export default function App() {
   const pct = Math.min(100, (dailyProgress.done / dailyProgress.goal) * 100)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: 560, background: 'var(--bg)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: 560, width: 400, position: 'relative', background: 'var(--bg)', overflow: 'hidden' }}>
 
       {/* Header */}
       <div style={{ padding: '12px 16px 0', borderBottom: '1px solid var(--border)' }}>
@@ -99,7 +116,7 @@ export default function App() {
             <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', letterSpacing: '-0.3px' }}>FocusGuard</span>
           </div>
 
-          {/* Right: sync + progress */}
+          {/* Right: sync + theme + progress */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {/* Sync indicator */}
             <SyncIndicator
@@ -107,6 +124,21 @@ export default function App() {
               syncStatus={syncStatus}
               onLoginClick={() => setShowAuth(true)}
             />
+
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              style={{
+                padding: 4, borderRadius: 6, border: 'none', background: 'none',
+                color: 'var(--muted2)', cursor: 'pointer', display: 'flex',
+                alignItems: 'center', transition: 'color 0.15s, background 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--muted2)' }}
+            >
+              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
 
             {/* Daily progress */}
             <div style={{ textAlign: 'right' }}>

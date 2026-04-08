@@ -82,6 +82,204 @@ function Heatmap({ dailyData }) {
   )
 }
 
+function calcWeekData(dailyData) {
+  const today = new Date()
+  const daysSinceMonday = (today.getDay() + 6) % 7  // Mon=0 … Sun=6
+
+  const makeKey = (d) => d.toISOString().split('T')[0]
+
+  const thisWeekDays = Array.from({ length: daysSinceMonday + 1 }, (_, i) => {
+    const d = new Date(today)
+    d.setDate(today.getDate() - daysSinceMonday + i)
+    return makeKey(d)
+  })
+
+  const lastWeekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today)
+    d.setDate(today.getDate() - daysSinceMonday - 7 + i)
+    return makeKey(d)
+  })
+
+  const sum = (days) => days.reduce((acc, date) => {
+    const d = dailyData[date] || {}
+    return {
+      pomodoros:    acc.pomodoros    + (d.pomodoros    || 0),
+      focusMinutes: acc.focusMinutes + (d.focusMinutes || 0),
+      distractions: acc.distractions + (d.distractions || 0),
+    }
+  }, { pomodoros: 0, focusMinutes: 0, distractions: 0 })
+
+  const tw = sum(thisWeekDays)
+  const lw = sum(lastWeekDays)
+  return {
+    thisWeek: { ...tw, avg: tw.pomodoros / thisWeekDays.length },
+    lastWeek: { ...lw, avg: lw.pomodoros / 7 },
+  }
+}
+
+function WeekComparison({ dailyData }) {
+  const { thisWeek, lastWeek } = calcWeekData(dailyData)
+
+  const metrics = [
+    { label: 'Pomodoros',    tw: thisWeek.pomodoros,                   lw: lastWeek.pomodoros,                   fmt: (v) => Math.round(v),    higherBetter: true  },
+    { label: 'Focus Hrs',    tw: thisWeek.focusMinutes / 60,           lw: lastWeek.focusMinutes / 60,           fmt: (v) => v.toFixed(1),     higherBetter: true  },
+    { label: 'Distractions', tw: thisWeek.distractions,                lw: lastWeek.distractions,                fmt: (v) => Math.round(v),    higherBetter: false },
+    { label: 'Daily Avg',    tw: thisWeek.avg,                         lw: lastWeek.avg,                         fmt: (v) => v.toFixed(1),     higherBetter: true  },
+  ]
+
+  return (
+    <div className="card">
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, fontWeight: 500 }}>📊 This Week vs Last Week</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {metrics.map(({ label, tw, lw, fmt, higherBetter }) => {
+          const diff = tw - lw
+          const pct  = lw === 0 ? (tw > 0 ? 100 : 0) : Math.round((diff / lw) * 100)
+          const better = higherBetter ? diff > 0 : diff < 0
+          const worse  = higherBetter ? diff < 0 : diff > 0
+          const color  = better ? 'var(--green)' : worse ? 'var(--accent)' : 'var(--muted)'
+          const arrow  = better ? '↑' : worse ? '↓' : '→'
+          const pctStr = diff === 0 ? '—' : `${diff > 0 ? '+' : ''}${pct}%`
+
+          return (
+            <div key={label} style={{ background: 'var(--surface2)', borderRadius: 8, padding: '8px 10px' }}>
+              <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 5 }}>{label}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>{fmt(tw)}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3 }}>vs {fmt(lw)} last wk</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: 16, fontWeight: 700, color, lineHeight: 1 }}>{arrow}</div>
+                  <div style={{ fontSize: 10, color, fontWeight: 600, marginTop: 3 }}>{pctStr}</div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function exportCSV(stats, settings) {
+  const s        = stats || {}
+  const daily    = s.dailyData || {}
+  const days     = getLast28Days()
+  const score    = calcScore(s, settings)
+  const hours    = ((s.totalFocusMinutes || 0) / 60).toFixed(1)
+
+  const rows = []
+  rows.push(['FocusGuard Stats Export', new Date().toLocaleDateString()])
+  rows.push([])
+  rows.push(['SUMMARY'])
+  rows.push(['Total Pomodoros', 'Total Hours', 'Current Streak', 'Best Streak', 'Focus Score', 'Distractions'])
+  rows.push([
+    s.totalPomodoros    || 0,
+    hours,
+    s.currentStreak     || 0,
+    s.longestStreak     || 0,
+    score,
+    s.distractions      || 0,
+  ])
+  rows.push([])
+  rows.push(['DAILY DATA (Last 28 Days)'])
+  rows.push(['Date', 'Pomodoros', 'Focus Minutes', 'Distractions'])
+  days.forEach((date) => {
+    const d = daily[date] || {}
+    rows.push([date, d.pomodoros || 0, d.focusMinutes || 0, d.distractions || 0])
+  })
+
+  const csv = rows.map((r) => r.map((cell) => `"${cell}"`).join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = 'focusguard-stats.csv'; a.click()
+  URL.revokeObjectURL(url)
+}
+
+function exportPDF(stats, settings) {
+  const s     = stats || {}
+  const daily = s.dailyData || {}
+  const days  = getLast28Days()
+  const score = calcScore(s, settings)
+  const hours = ((s.totalFocusMinutes || 0) / 60).toFixed(1)
+  const date  = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+
+  const grade = score >= 90 ? 'S' : score >= 75 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : 'D'
+  const scoreColor = score >= 70 ? '#3fb950' : score >= 40 ? '#d29922' : '#f85149'
+
+  const summaryCards = [
+    { label: 'Total Pomodoros',  value: s.totalPomodoros || 0,          icon: '🍅' },
+    { label: 'Focus Hours',      value: hours,                           icon: '⏱️' },
+    { label: 'Current Streak',   value: `${s.currentStreak || 0} days`, icon: '🔥' },
+    { label: 'Best Streak',      value: `${s.longestStreak || 0} days`, icon: '🏆' },
+    { label: 'Focus Score',      value: `${score} (${grade})`,          icon: '⭐' },
+    { label: 'Distractions',     value: s.distractions || 0,            icon: '❌' },
+  ]
+
+  const tableRows = days.map((date) => {
+    const d = daily[date] || {}
+    return `<tr>
+      <td>${date}</td>
+      <td>${d.pomodoros || 0}</td>
+      <td>${d.focusMinutes || 0}</td>
+      <td>${d.distractions || 0}</td>
+    </tr>`
+  }).join('')
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>FocusGuard Report</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #1a1a2e; padding: 40px; background: #fff; }
+    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #f85149; padding-bottom: 16px; margin-bottom: 28px; }
+    .logo { display: flex; align-items: center; gap: 10px; }
+    .logo-icon { font-size: 28px; }
+    .logo-text { font-size: 22px; font-weight: 700; color: #f85149; }
+    .report-date { font-size: 13px; color: #666; }
+    .section-title { font-size: 14px; font-weight: 600; color: #444; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 32px; }
+    .card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 16px 12px; text-align: center; }
+    .card-icon { font-size: 20px; margin-bottom: 6px; }
+    .card-value { font-size: 20px; font-weight: 700; color: #f85149; margin-bottom: 4px; }
+    .card-label { font-size: 11px; color: #888; }
+    .score-card .card-value { color: ${scoreColor}; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    thead tr { background: #f85149; color: #fff; }
+    th { padding: 8px 12px; text-align: left; font-weight: 600; }
+    td { padding: 7px 12px; border-bottom: 1px solid #f0f0f0; }
+    tr:nth-child(even) td { background: #fafafa; }
+    .footer { margin-top: 28px; text-align: center; font-size: 11px; color: #aaa; }
+    @media print { body { padding: 20px; } }
+  </style>
+  </head><body>
+  <div class="header">
+    <div class="logo"><span class="logo-icon">🛡️</span><span class="logo-text">FocusGuard</span></div>
+    <span class="report-date">Report generated: ${date}</span>
+  </div>
+  <div class="section-title">Summary</div>
+  <div class="cards">
+    ${summaryCards.map((c, i) => `
+    <div class="card ${i === 4 ? 'score-card' : ''}">
+      <div class="card-icon">${c.icon}</div>
+      <div class="card-value">${c.value}</div>
+      <div class="card-label">${c.label}</div>
+    </div>`).join('')}
+  </div>
+  <div class="section-title">Daily Activity — Last 28 Days</div>
+  <table>
+    <thead><tr><th>Date</th><th>Pomodoros</th><th>Focus Minutes</th><th>Distractions</th></tr></thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+  <div class="footer">Generated by FocusGuard · focusguard-report.pdf</div>
+  <script>window.onload = () => { window.print(); }<\/script>
+  </body></html>`
+
+  const win = window.open('', '_blank', 'width=800,height=600')
+  win.document.write(html)
+  win.document.close()
+}
+
 export default function Stats() {
   const [stats,    setStats]    = useState(null)
   const [tasks,    setTasks]    = useState([])
@@ -197,6 +395,9 @@ export default function Stats() {
         </ResponsiveContainer>
       </div>
 
+      {/* This week vs last week */}
+      <WeekComparison dailyData={dailyData} />
+
       {/* Heatmap */}
       <div className="card">
         <Heatmap dailyData={dailyData} />
@@ -225,6 +426,34 @@ export default function Stats() {
             🏅 Best day: <span style={{ color: 'var(--text)' }}>{bestDay[0]}</span> — {bestDay[1].pomodoros} 🍅
           </div>
         )}
+      </div>
+
+      {/* Export buttons */}
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={() => exportCSV(stats, settings)}
+          style={{
+            flex: 1, padding: '9px 0', borderRadius: 8, border: '1px solid var(--border)',
+            background: 'transparent', color: 'var(--text)', fontSize: 12, fontWeight: 500,
+            cursor: 'pointer', transition: 'border-color 0.15s, color 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)' }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text)' }}
+        >
+          ⬇ Export CSV
+        </button>
+        <button
+          onClick={() => exportPDF(stats, settings)}
+          style={{
+            flex: 1, padding: '9px 0', borderRadius: 8, border: 'none',
+            background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 500,
+            cursor: 'pointer', opacity: 1, transition: 'opacity 0.15s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+        >
+          ⬇ Export PDF
+        </button>
       </div>
     </div>
   )

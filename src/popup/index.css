@@ -18,6 +18,22 @@
   --muted2: #484f58;
 }
 
+[data-theme="light"] {
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --surface2: #f0f0f0;
+  --border: #e0e0e0;
+  --text: #1a1a1a;
+  --muted: #6b7280;
+  --muted2: #9ca3af;
+  --accent: #f85149;
+  --accent-glow: rgba(248, 81, 73, 0.2);
+  --green: #2da44e;
+  --blue: #0969da;
+  --purple: #8250df;
+  --yellow: #9a6700;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
