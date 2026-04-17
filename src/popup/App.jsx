@@ -113,7 +113,7 @@ export default function App() {
 
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 20 }}>🛡️</span>
+            <img src="/icons/icon48.png" alt="FocusGuard" style={{ width: 24, height: 24, borderRadius: 6 }} />
             <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--text)', letterSpacing: '-0.3px' }}>FocusGuard</span>
           </div>
 

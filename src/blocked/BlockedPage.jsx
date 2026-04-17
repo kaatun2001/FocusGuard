@@ -158,14 +158,16 @@ export default function BlockedPage() {
           border: '1px solid rgba(255,255,255,0.08)',
           backdropFilter: 'blur(10px)',
         }}>
-          <span style={{ fontSize: 18 }}>🛡️</span>
+          <img src="/icons/icon48.png" alt="FocusGuard" style={{ width: 24, height: 24, borderRadius: 6 }} />
           <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: '0.5px', color: '#e6edf3' }}>FocusGuard</span>
         </div>
 
         {/* Shield + Badge */}
         <div className="blocked-fade-up-2" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 20 }}>
           {/* Big shield */}
-          <div className="blocked-shield-glow" style={{ fontSize: 72, lineHeight: 1, userSelect: 'none' }}>🛡️</div>
+          <div className="blocked-shield-glow" style={{ lineHeight: 1, userSelect: 'none' }}>
+            <img src="/icons/icon128.png" alt="FocusGuard" style={{ width: 64, height: 64, borderRadius: 16 }} />
+          </div>
 
           {/* BLOCKED badge */}
           <div className="blocked-badge-pulse" style={{
