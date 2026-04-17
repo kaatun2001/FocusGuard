@@ -1,0 +1,70 @@
+/* Override popup body constraints for full-screen blocked page */
+html, body {
+  width: 100% !important;
+  min-height: 100vh !important;
+  overflow-x: hidden;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* ── Animations ── */
+@keyframes orb-float {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50%       { transform: translateY(-30px) scale(1.05); }
+}
+@keyframes orb-float-r {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50%       { transform: translateY(20px) scale(0.95); }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes badge-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248,81,73,0.4); }
+  50%       { box-shadow: 0 0 0 10px rgba(248,81,73,0); }
+}
+@keyframes shield-glow {
+  0%, 100% { filter: drop-shadow(0 0 12px rgba(248,81,73,0.5)); }
+  50%       { filter: drop-shadow(0 0 28px rgba(248,81,73,0.9)); }
+}
+@keyframes ring-rotate {
+  from { transform: rotate(-90deg); }
+  to   { transform: rotate(270deg); }
+}
+@keyframes breathe-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%       { opacity: 1; }
+}
+@keyframes particle-drift {
+  0%   { transform: translateY(0) translateX(0) scale(1); opacity: 0.6; }
+  50%  { transform: translateY(-60px) translateX(20px) scale(1.2); opacity: 1; }
+  100% { transform: translateY(-120px) translateX(-10px) scale(0.8); opacity: 0; }
+}
+@keyframes scanline {
+  0%   { top: -2px; }
+  100% { top: 100%; }
+}
+
+.blocked-orb-1 { animation: orb-float   14s ease-in-out infinite; }
+.blocked-orb-2 { animation: orb-float-r 10s ease-in-out infinite; }
+.blocked-orb-3 { animation: orb-float   18s ease-in-out infinite 3s; }
+
+.blocked-fade-up-1 { animation: fade-up 0.6s ease forwards 0.1s; opacity: 0; }
+.blocked-fade-up-2 { animation: fade-up 0.6s ease forwards 0.25s; opacity: 0; }
+.blocked-fade-up-3 { animation: fade-up 0.6s ease forwards 0.4s; opacity: 0; }
+.blocked-fade-up-4 { animation: fade-up 0.6s ease forwards 0.55s; opacity: 0; }
+.blocked-fade-up-5 { animation: fade-up 0.6s ease forwards 0.7s; opacity: 0; }
+.blocked-fade-up-6 { animation: fade-up 0.6s ease forwards 0.85s; opacity: 0; }
+
+.blocked-badge-pulse { animation: badge-pulse 2s ease infinite; }
+.blocked-shield-glow { animation: shield-glow 3s ease-in-out infinite; }
+
+.blocked-particle { animation: particle-drift linear infinite; }
