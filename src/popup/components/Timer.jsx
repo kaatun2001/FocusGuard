@@ -70,6 +70,11 @@ export default function Timer() {
     })
   }, [])
 
+  const mode      = timerState?.mode || 'idle'
+  const isRunning = timerState?.isRunning || false
+  const session   = timerState?.session || 1
+  const isStrict  = !!(settings?.strictMode && mode === 'focus' && isRunning)
+
   // Keyboard shortcuts: Space = play/pause, R = reset, S = skip
   const send = useCallback((type) => chrome.runtime.sendMessage({ type }), [])
   const sendGuarded = useCallback((type) => {
@@ -81,18 +86,14 @@ export default function Timer() {
   useEffect(() => {
     const onKey = (e) => {
       if (e.target.tagName === 'INPUT') return
-      if (e.code === 'Space') { e.preventDefault(); sendGuarded(isRunning ? 'PAUSE_TIMER' : 'START_TIMER') }
-      if (e.code === 'KeyR')  sendGuarded('RESET_TIMER')
-      if (e.code === 'KeyS')  sendGuarded('SKIP_TIMER')
+      if (settings?.strictMode && isRunning && mode === 'focus') return
+      if (e.code === 'Space') { e.preventDefault(); send(isRunning ? 'PAUSE_TIMER' : 'START_TIMER') }
+      if (e.code === 'KeyR')  send('RESET_TIMER')
+      if (e.code === 'KeyS')  send('SKIP_TIMER')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [send, sendGuarded, timerState])
-
-  const mode      = timerState?.mode || 'idle'
-  const isRunning = timerState?.isRunning || false
-  const session   = timerState?.session || 1
-  const isStrict  = !!(settings?.strictMode && mode === 'focus' && isRunning)
+  }, [send, settings, isRunning, mode])
   const modeInfo  = MODES[mode] || MODES.idle
   const sessionsBeforeLong = settings?.sessionsBeforeLong || 4
   const totalSeconds = getDurationForMode(mode === 'idle' ? 'focus' : mode, settings)
