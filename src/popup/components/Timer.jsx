@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Play, Pause, RotateCcw, SkipForward, ChevronDown, Zap } from 'lucide-react'
 import { getTimeLeft, formatTime, getDurationForMode } from '../../utils/storage.js'
 
@@ -16,6 +16,9 @@ export default function Timer() {
   const [activeTaskId, setActiveTaskId] = useState(null)
   const [settings, setSettings]       = useState(null)
   const [showPicker, setShowPicker]   = useState(false)
+  const [strictMsg,  setStrictMsg]    = useState(false)
+  const shakeRef = useRef(null)
+  const strictTimer = useRef(null)
 
   // Load from storage
   useEffect(() => {
@@ -51,22 +54,45 @@ export default function Timer() {
     return () => clearInterval(iv)
   }, [timerState])
 
+  // Shake + message when strict mode blocks an action
+  const triggerStrictReject = useCallback(() => {
+    clearTimeout(strictTimer.current)
+    setStrictMsg(false)
+    // Force re-mount of shake class by toggling off then on
+    requestAnimationFrame(() => {
+      if (shakeRef.current) {
+        shakeRef.current.classList.remove('animate-shake')
+        void shakeRef.current.offsetWidth // reflow
+        shakeRef.current.classList.add('animate-shake')
+      }
+      setStrictMsg(true)
+      strictTimer.current = setTimeout(() => setStrictMsg(false), 2500)
+    })
+  }, [])
+
   // Keyboard shortcuts: Space = play/pause, R = reset, S = skip
   const send = useCallback((type) => chrome.runtime.sendMessage({ type }), [])
+  const sendGuarded = useCallback((type) => {
+    chrome.runtime.sendMessage({ type }).then((res) => {
+      if (res?.reason === 'strict') triggerStrictReject()
+    }).catch(() => {})
+  }, [triggerStrictReject])
+
   useEffect(() => {
     const onKey = (e) => {
       if (e.target.tagName === 'INPUT') return
-      if (e.code === 'Space') { e.preventDefault(); send(isRunning ? 'PAUSE_TIMER' : 'START_TIMER') }
-      if (e.code === 'KeyR')  send('RESET_TIMER')
-      if (e.code === 'KeyS')  send('SKIP_TIMER')
+      if (e.code === 'Space') { e.preventDefault(); sendGuarded(isRunning ? 'PAUSE_TIMER' : 'START_TIMER') }
+      if (e.code === 'KeyR')  sendGuarded('RESET_TIMER')
+      if (e.code === 'KeyS')  sendGuarded('SKIP_TIMER')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [send, timerState])
+  }, [send, sendGuarded, timerState])
 
   const mode      = timerState?.mode || 'idle'
   const isRunning = timerState?.isRunning || false
   const session   = timerState?.session || 1
+  const isStrict  = !!(settings?.strictMode && mode === 'focus' && isRunning)
   const modeInfo  = MODES[mode] || MODES.idle
   const sessionsBeforeLong = settings?.sessionsBeforeLong || 4
   const totalSeconds = getDurationForMode(mode === 'idle' ? 'focus' : mode, settings)
@@ -109,7 +135,7 @@ export default function Timer() {
       </div>
 
       {/* Circle timer */}
-      <div style={{ position: 'relative', width: 210, height: 210 }}>
+      <div ref={shakeRef} style={{ position: 'relative', width: 210, height: 210 }}>
         <svg width="210" height="210" style={{ transform: 'rotate(-90deg)', position: 'absolute' }}>
           <circle cx="105" cy="105" r={R} fill="none" stroke="var(--surface)" strokeWidth="12" />
           <circle
@@ -131,15 +157,25 @@ export default function Timer() {
           position: 'absolute', inset: 0,
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         }}>
-          <span style={{ fontSize: 42, fontWeight: 700, letterSpacing: -2, fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>
-            {formatTime(timeLeft)}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 42, fontWeight: 700, letterSpacing: -2, fontVariantNumeric: 'tabular-nums', color: 'var(--text)' }}>
+              {formatTime(timeLeft)}
+            </span>
+            {isStrict && (
+              <span title="Strict mode active" style={{ fontSize: 18, lineHeight: 1, cursor: 'default' }}>🔒</span>
+            )}
+          </div>
           <span style={{ fontSize: 11, color: modeInfo.color, fontWeight: 500, marginTop: 2 }}>
             {modeInfo.label}
           </span>
-          {isRunning && (
+          {isRunning && !isStrict && (
             <span style={{ fontSize: 9, color: 'var(--muted)', marginTop: 4 }}>
               Space to pause
+            </span>
+          )}
+          {isStrict && (
+            <span style={{ fontSize: 9, color: 'var(--muted)', marginTop: 4 }}>
+              Strict mode active
             </span>
           )}
         </div>
@@ -162,29 +198,56 @@ export default function Timer() {
       </div>
 
       {/* Controls */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <button className="btn btn-ghost" style={{ padding: '8px 10px', borderRadius: 10 }} onClick={() => send('RESET_TIMER')} title="Reset (R)">
-          <RotateCcw size={16} />
-        </button>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            className="btn btn-ghost"
+            style={{ padding: '8px 10px', borderRadius: 10, opacity: isStrict ? 0.35 : 1, cursor: isStrict ? 'not-allowed' : 'pointer' }}
+            onClick={() => isStrict ? triggerStrictReject() : sendGuarded('RESET_TIMER')}
+            title={isStrict ? 'Strict mode active' : 'Reset (R)'}
+          >
+            <RotateCcw size={16} />
+          </button>
 
-        <button
-          onClick={() => send(isRunning ? 'PAUSE_TIMER' : 'START_TIMER')}
-          title="Play/Pause (Space)"
-          style={{
-            width: 60, height: 60, borderRadius: '50%', border: 'none',
-            background: modeInfo.color, color: '#fff', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: isRunning ? `0 0 20px ${modeInfo.color}60` : 'none',
-            transform: isRunning ? 'scale(1.05)' : 'scale(1)',
-            transition: 'all 0.2s',
-          }}
-        >
-          {isRunning ? <Pause size={24} fill="#fff" /> : <Play size={24} fill="#fff" />}
-        </button>
+          <button
+            onClick={() => isStrict ? triggerStrictReject() : sendGuarded(isRunning ? 'PAUSE_TIMER' : 'START_TIMER')}
+            title={isStrict ? 'Strict mode active' : 'Play/Pause (Space)'}
+            style={{
+              width: 60, height: 60, borderRadius: '50%', border: 'none',
+              background: isStrict ? 'var(--muted2)' : modeInfo.color,
+              color: '#fff', cursor: isStrict ? 'not-allowed' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: isRunning && !isStrict ? `0 0 20px ${modeInfo.color}60` : 'none',
+              transform: isRunning && !isStrict ? 'scale(1.05)' : 'scale(1)',
+              transition: 'all 0.2s',
+              opacity: isStrict ? 0.45 : 1,
+            }}
+          >
+            {isRunning ? <Pause size={24} fill="#fff" /> : <Play size={24} fill="#fff" />}
+          </button>
 
-        <button className="btn btn-ghost" style={{ padding: '8px 10px', borderRadius: 10 }} onClick={() => send('SKIP_TIMER')} title="Skip (S)">
-          <SkipForward size={16} />
-        </button>
+          <button
+            className="btn btn-ghost"
+            style={{ padding: '8px 10px', borderRadius: 10, opacity: isStrict ? 0.5 : 1, cursor: isStrict ? 'not-allowed' : 'pointer' }}
+            onClick={() => isStrict ? triggerStrictReject() : sendGuarded('SKIP_TIMER')}
+            title={isStrict ? 'Strict mode active' : 'Skip (S)'}
+          >
+            <SkipForward size={16} />
+          </button>
+        </div>
+
+        {/* Strict mode rejection message */}
+        {strictMsg && (
+          <div style={{
+            fontSize: 11, color: '#f85149', fontWeight: 600,
+            background: 'rgba(248,81,73,0.1)',
+            border: '1px solid rgba(248,81,73,0.25)',
+            borderRadius: 8, padding: '5px 12px',
+            animation: 'fadeIn 0.15s ease',
+          }}>
+            🔒 Strict mode — finish your session!
+          </div>
+        )}
       </div>
 
       {/* Keyboard shortcuts hint */}

@@ -21,7 +21,19 @@ chrome.runtime.onInstalled.addListener(async () => {
 // ── Alarms ─────────────────────────────────────────────────────────────────────
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'timerComplete') await handleComplete()
+  if (alarm.name === 'badgeUpdate')   await updateBadge()
 })
+
+async function updateBadge() {
+  const { timerState } = await storageGet(['timerState'])
+  if (!timerState?.isRunning) return
+  const elapsed   = timerState.startTime ? Math.floor((Date.now() - timerState.startTime) / 1000) : 0
+  const remaining = Math.max(0, timerState.timeLeft - elapsed)
+  const mins      = Math.ceil(remaining / 60)
+  const colors    = { focus: '#f85149', shortBreak: '#3fb950', longBreak: '#58a6ff' }
+  chrome.action.setBadgeBackgroundColor({ color: colors[timerState.mode] || '#6e7681' })
+  chrome.action.setBadgeText({ text: mins + 'm' })
+}
 
 // ── Messages ───────────────────────────────────────────────────────────────────
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -43,16 +55,19 @@ async function handleMessage(msg) {
       const newState = { ...state, mode, isRunning: true, startTime: now, timeLeft }
       await storageSet({ timerState: newState })
       chrome.alarms.create('timerComplete', { delayInMinutes: timeLeft / 60 })
+      chrome.alarms.create('badgeUpdate', { periodInMinutes: 1 })
       return { ok: true }
     }
 
     case 'PAUSE_TIMER': {
       if (!state.isRunning) return { ok: false }
+      if (cfg.strictMode && state.mode === 'focus') return { ok: false, reason: 'strict' }
       const elapsed = state.startTime ? Math.floor((Date.now() - state.startTime) / 1000) : 0
       const remaining = Math.max(0, state.timeLeft - elapsed)
       const newState = { ...state, isRunning: false, startTime: null, timeLeft: remaining }
       await storageSet({ timerState: newState })
       chrome.alarms.clear('timerComplete')
+      chrome.alarms.clear('badgeUpdate')
       const pausedMins = Math.ceil(remaining / 60)
       chrome.action.setBadgeBackgroundColor({ color: '#6e7681' })
       chrome.action.setBadgeText({ text: `⏸${pausedMins}` })
@@ -60,7 +75,9 @@ async function handleMessage(msg) {
     }
 
     case 'RESET_TIMER': {
+      if (cfg.strictMode && state.mode === 'focus' && state.isRunning) return { ok: false, reason: 'strict' }
       chrome.alarms.clear('timerComplete')
+      chrome.alarms.clear('badgeUpdate')
       const resetTimeLeft = cfg.focusDuration * 60
       const newState = { ...DEFAULT_TIMER, timeLeft: resetTimeLeft }
       await storageSet({ timerState: newState })
@@ -71,7 +88,9 @@ async function handleMessage(msg) {
     }
 
     case 'SKIP_TIMER': {
+      if (cfg.strictMode && state.mode === 'focus' && state.isRunning) return { ok: false, reason: 'strict' }
       chrome.alarms.clear('timerComplete')
+      chrome.alarms.clear('badgeUpdate')
       const { mode: nextMode, session: nextSession } = getNextMode(state.mode, state.session, cfg)
       const nextTimeLeft = getDurationForMode(nextMode, cfg)
       const newState = { mode: nextMode, isRunning: false, startTime: null, timeLeft: nextTimeLeft, session: nextSession }
@@ -158,7 +177,9 @@ async function handleComplete() {
 
   if (shouldAutoStart) {
     chrome.alarms.create('timerComplete', { delayInMinutes: nextTimeLeft / 60 })
+    chrome.alarms.create('badgeUpdate', { periodInMinutes: 1 })
   } else {
+    chrome.alarms.clear('badgeUpdate')
     const completeColors = { focus: '#f85149', shortBreak: '#3fb950', longBreak: '#58a6ff' }
     chrome.action.setBadgeBackgroundColor({ color: completeColors[nextMode] || '#6e7681' })
     chrome.action.setBadgeText({ text: `${Math.ceil(nextTimeLeft / 60)}m` })

@@ -9,13 +9,19 @@ export default function Settings({ user, onLoginClick }) {
   const [settings,   setSettings]   = useState(DEFAULT_SETTINGS)
   const [toast,      setToast]      = useState('')
   const [syncingNow, setSyncingNow] = useState(false)
+  const [timerState, setTimerState] = useState(null)
+
+  const focusLocked  = !!(timerState?.isRunning && timerState?.mode === 'focus')
+  const strictLocked = !!(focusLocked && settings.strictMode)
 
   useEffect(() => {
-    chrome.storage.local.get(['settings'], (r) => {
+    chrome.storage.local.get(['settings', 'timerState'], (r) => {
       if (r.settings) setSettings({ ...DEFAULT_SETTINGS, ...r.settings })
+      if (r.timerState) setTimerState(r.timerState)
     })
     const listener = (c) => {
-      if (c.settings) setSettings({ ...DEFAULT_SETTINGS, ...c.settings.newValue })
+      if (c.settings)    setSettings({ ...DEFAULT_SETTINGS, ...c.settings.newValue })
+      if (c.timerState)  setTimerState(c.timerState.newValue)
     }
     chrome.storage.onChanged.addListener(listener)
     return () => chrome.storage.onChanged.removeListener(listener)
@@ -101,14 +107,26 @@ export default function Settings({ user, onLoginClick }) {
     </div>
   )
 
-  const NumberInput = ({ value, onChange, min = 1, max = 120 }) => (
-    <input
-      type="number" min={min} max={max} value={value}
-      onChange={(e) => onChange(Math.max(min, Math.min(max, Number(e.target.value))))}
-      className="input"
-      style={{ width: 54, textAlign: 'center', padding: '5px 6px' }}
-    />
-  )
+  const NumberInput = ({ value, onChange, min = 1, max = 120 }) => {
+    const [local, setLocal] = useState(value)
+    // Sync if the stored value changes externally (e.g. cloud sync)
+    useEffect(() => { setLocal(value) }, [value])
+    const commit = (raw) => {
+      const clamped = Math.max(min, Math.min(max, Number(raw) || min))
+      setLocal(clamped)
+      onChange(clamped)
+    }
+    return (
+      <input
+        type="number" min={min} max={max} value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={(e) => commit(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && commit(e.target.value)}
+        className="input"
+        style={{ width: 54, textAlign: 'center', padding: '5px 6px' }}
+      />
+    )
+  }
 
   return (
     <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -199,6 +217,20 @@ export default function Settings({ user, onLoginClick }) {
         <Row label="Daily goal" sublabel="Pomodoros per day target">
           <NumberInput value={settings.dailyGoal} onChange={(v) => save({ dailyGoal: v })} min={1} max={50} />
         </Row>
+        <div>
+          <Row label="🔒 Strict Mode" sublabel="Lock timer during focus — no pausing or resetting">
+            <button
+              className={`toggle ${settings.strictMode ? 'active' : ''}`}
+              onClick={() => !strictLocked && save({ strictMode: !settings.strictMode })}
+              style={{ opacity: strictLocked ? 0.5 : 1, cursor: strictLocked ? 'not-allowed' : 'pointer' }}
+            />
+          </Row>
+          {strictLocked && (
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+              🔒 Cannot disable during focus session
+            </div>
+          )}
+        </div>
       </Section>
 
       {/* Sound & Notifications */}
@@ -223,11 +255,7 @@ export default function Settings({ user, onLoginClick }) {
 
       {/* Website blocking */}
       <Section icon="🚫" title="Website Blocking">
-        <Row label="Block during focus" sublabel="Redirect blocked sites">
-          <button className={`toggle ${settings.blockingEnabled ? 'active' : ''}`} onClick={() => save({ blockingEnabled: !settings.blockingEnabled })} />
-        </Row>
-
-        <AddSiteInput onAdd={addSite} />
+        <AddSiteInput onAdd={addSite} disabled={focusLocked} />
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 130, overflowY: 'auto' }}>
           {settings.blockedSites.map((site) => (
@@ -236,12 +264,20 @@ export default function Settings({ user, onLoginClick }) {
               background: 'var(--bg)', borderRadius: 7, padding: '6px 10px',
             }}>
               <span style={{ fontSize: 12, color: 'var(--text)' }}>🚫 {site}</span>
-              <button onClick={() => removeSite(site)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 2 }}>
-                <X size={13} />
-              </button>
+              {!focusLocked && (
+                <button onClick={() => removeSite(site)} style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 2 }}>
+                  <X size={13} />
+                </button>
+              )}
             </div>
           ))}
         </div>
+
+        {focusLocked && (
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+            🔒 Cannot edit blocked sites during focus session
+          </div>
+        )}
       </Section>
 
       {/* Danger zone */}
@@ -273,26 +309,33 @@ export default function Settings({ user, onLoginClick }) {
 // ── Isolated input component ───────────────────────────────────────────────────
 // Wrapped in memo so it NEVER re-renders when Settings re-renders due to
 // chrome.storage.onChanged. The input keeps focus while the user types.
-const AddSiteInput = memo(function AddSiteInput({ onAdd }) {
+const AddSiteInput = memo(function AddSiteInput({ onAdd, disabled }) {
   const [value, setValue] = useState('')
 
   const submit = () => {
+    if (disabled) return
     const added = onAdd(value)
     if (added !== false) setValue('')
   }
 
   return (
-    <div style={{ display: 'flex', gap: 6 }}>
+    <div style={{ display: 'flex', gap: 6, opacity: disabled ? 0.5 : 1 }}>
       <input
         className="input"
         type="text"
         value={value}
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => !disabled && setValue(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && submit()}
         placeholder="e.g. twitter.com"
-        style={{ flex: 1, padding: '6px 10px', fontSize: 12 }}
+        disabled={disabled}
+        style={{ flex: 1, padding: '6px 10px', fontSize: 12, cursor: disabled ? 'not-allowed' : 'text' }}
       />
-      <button className="btn btn-primary" style={{ padding: '6px 10px' }} onClick={submit}>
+      <button
+        className="btn btn-primary"
+        style={{ padding: '6px 10px', opacity: disabled ? 0.5 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+        onClick={submit}
+        disabled={disabled}
+      >
         <Plus size={14} />
       </button>
     </div>

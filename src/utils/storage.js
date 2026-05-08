@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS = {
   soundVolume: 0.7,
   dailyGoal: 8,
   notificationsEnabled: true,
+  strictMode: false,
 }
 
 export const DEFAULT_TIMER = {
